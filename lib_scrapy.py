@@ -45,15 +45,28 @@ def scrape_post_urls(keyword, location, number):
     responses = itertools.chain.from_iterable(crawl_post(url) for url in urls)
     soups = list(BeautifulSoup(response["body"], "html.parser") for response in responses)
     posts = itertools.chain.from_iterable(soup.find_all("li") for soup in soups)
-    return list(post.select_one("a.base-card__full-link").get("href") for post in posts)
+    return list({
+        "listdate": post.select_one("time").get("datetime"),
+        "url": post.select_one("a.base-card__full-link").get("href")
+    } for post in posts)
 
 
-def scrape_description_texts(urls):
-    responses = itertools.chain.from_iterable(crawl_post(url) for url in urls)
+def scrape_posts(urls):
+    responses = itertools.chain.from_iterable(crawl_post(url["url"]) for url in urls)
     soups = list(BeautifulSoup(response["body"], "html.parser") for response in responses)
-    description_texts = list(soup.select_one("div.description__text").prettify() for soup in soups if soup.select_one("div.description__text"))
-    return description_texts
+    posts = list({
+        "url": urls[index]["url"],
+        "listdate": urls[index]["listdate"],
+        "title": soup.select_one("h3.sub-nav-cta__header").string,
+        "company": soup.select_one("a.sub-nav-cta__optional-url").string,
+        "description": soup.select_one("div.description__text").prettify(),
+        "criteria": list({
+            "key": item.select_one("h3.description__job-criteria-subheader").string.strip(),
+            "value": item.select_one("span.description__job-criteria-text").string.strip()
+        } for item in soup.select_one("ul.description__job-criteria-list").select("li.description__job-criteria-item"))
+    } for index, soup in enumerate(soups))
+    return posts
 
 
 if __name__ == "__main__":
-    scrape_description_texts(scrape_post_urls("Computer Science", "Singapore", 50))
+    scrape_posts(scrape_post_urls("Computer Science", "Singapore", 50))
