@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify
-import lib_scrapy as lib
+import lib
 
 app = Flask(__name__)
 posts = []
