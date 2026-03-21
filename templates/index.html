@@ -20,8 +20,8 @@
                 <input placeholder="City, state, or zip code" class="form-control" id="jobs-search-box-location-id" type="text">
             </div>
             <div class="mb-3">
-                <label class="sr-only" for="jobs-search-box-results-id">Number of search results</label>
-                <input placeholder="Number of search results" class="form-control" id="jobs-search-box-results-id" type="number" min="1" value="25" required>
+                <label class="sr-only" for="jobs-search-box-number-id">Number of search results</label>
+                <input placeholder="Number of search results" class="form-control" id="jobs-search-box-number-id" type="number" min="1" value="25" required>
                 <div class="form-text">Note that more time would be needed to search and analyze more search results.</div>
             </div>
             <button class="btn btn-primary" id="jobs-search-box-button-id" type="button">Search</button>
@@ -39,66 +39,143 @@
         const FormElement = document.getElementById("jobs-search-box-id");
         const KeywordInputElement = document.getElementById("jobs-search-box-keyword-id");
         const LocationInputElement = document.getElementById("jobs-search-box-location-id");
-        const ResultsInputElement = document.getElementById("jobs-search-box-results-id");
+        const NumberInputElement = document.getElementById("jobs-search-box-number-id");
         const ButtonElement = document.getElementById("jobs-search-box-button-id");
         const OutputDivElement = document.getElementById("output");
 
         ButtonElement.addEventListener("click", async () => {
             if (FormElement.checkValidity()) {
                 OutputDivElement.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>&nbsp;<span>Retrieving data from backend...</span>";
-                const response = await fetch("/analyze", {
+
+                const response = await fetch("/extract", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
                         keyword: KeywordInputElement.value,
                         location: LocationInputElement.value,
-                        number: ResultsInputElement.value,
+                        number: NumberInputElement.value,
                     }),
                 });
+
                 if (!response.ok) {
                     OutputDivElement.innerHTML = "Backend response failed";
                     throw new Error(`Response status: ${response.status}`);
                 }
 
                 const result = await response.json();
-                result.data.sort((a, b) => b.value - a.value);
-                OutputDivElement.innerHTML = "<select class='selectpicker w-auto' id='select' multiple='multiple' data-live-search='true' data-selected-text-format='count' data-actions-box='true'></select>";
-                OutputDivElement.innerHTML += "<canvas id='chart'></canvas>";
 
-                const SelectElement = document.getElementById("select");
-                for (const token of result.data.map(row => row.label)) {
-                    SelectElement.add(new Option(token));
-                }
-                $("#select").selectpicker("refresh");
+                const OptionElement = document.createElement("div");
+                const ResultElement = document.createElement("div");
+                OutputDivElement.replaceChildren(OptionElement, ResultElement);
 
-                const ChartElement = document.getElementById("chart");
-                const chart = new Chart(
-                    ChartElement, {
-                        type: "bar",
-                        data: {
-                            labels: [],
-                            datasets: [
-                                {
-                                    label: "Token count",
-                                    data: []
-                                }
-                            ]
-                        },
-                        options: {responsive: true}
+                // Render OptionElement
+                OptionElement.classList.add("card", "mb-3");
+
+                const OptionBodyElement = document.createElement("div");
+                OptionBodyElement.classList.add("card-body");
+                OptionElement.appendChild(OptionBodyElement);
+
+                const OptionTitleElement = document.createElement("div");
+                OptionTitleElement.classList.add("card-title");
+                OptionTitleElement.innerHTML = "<strong>Options</strong>";
+                OptionBodyElement.appendChild(OptionTitleElement);
+
+                const OptionFormElement = document.createElement("form");
+                OptionBodyElement.appendChild(OptionFormElement);
+
+                function CreateOptionFormGroupElement(id, header, array, selected) {
+                    const result = document.createElement("div");
+                    result.classList.add("form-group");
+
+                    // Create and add label tag
+                    const newLabel = document.createElement("label");
+                    newLabel.innerText = `${header}:`;
+                    newLabel.htmlFor = id;
+                    result.appendChild(newLabel);
+
+                    // Create and add select tag
+                    const newSelect = document.createElement("select");
+                    newSelect.classList.add("selectpicker", "w-auto", "form-control");
+                    newSelect.id = id;
+                    newSelect.multiple = true;
+                    newSelect.setAttribute("data-live-search", true);
+                    newSelect.setAttribute("data-selected-text-format", "count");
+                    newSelect.setAttribute("data-actions-box", true);
+                    result.appendChild(newSelect);
+
+                    // Add options to select tag
+                    const uniqueArray = [...new Set(array)];
+                    uniqueArray.sort();
+                    for (const element of uniqueArray) {
+                        newSelect.add(new Option(element, element, selected, selected));
                     }
+
+                    return result;
+                }
+
+                OptionFormElement.append(
+                    CreateOptionFormGroupElement("option-box-company-id", "Company", result.posts.map(row => row.company), true),
+                    CreateOptionFormGroupElement("option-box-seniority-id", "Seniority level", result.posts.map(row => row.seniority), true),
+                    CreateOptionFormGroupElement("option-box-type-id", "Employment type", result.posts.map(row => row.type_), true),
+                    CreateOptionFormGroupElement("option-box-function-id", "Job function", result.posts.map(row => row.function_), true),
+                    CreateOptionFormGroupElement("option-box-industry-id", "Industries", result.posts.map(row => row.industries), true),
+                    CreateOptionFormGroupElement("option-box-token-id", "Preferred tokens", [], false)
                 );
 
-                SelectElement.addEventListener("change", () => {
-                    const selectedOptions = Array.from(SelectElement.options).filter(option => option.selected).map(option => option.value);
-                    const selectedOptionSet = new Set(selectedOptions);
-                    const chartData = result.data.filter(token => {
-                        return selectedOptionSet.has(token.label);
-                    });
-                    chartData.sort((a, b) => b.value - a.value);
-                    chart.data.labels = chartData.map(row => row.label);
-                    chart.data.datasets[0].data = chartData.map(row => row.value);
-                    chart.update();
-                });
+                $(".selectpicker").selectpicker("refresh");
+
+                // Render ResultElement
+                class JobPost {
+                    constructor(post) {
+                        this.post = post;
+                    }
+
+                    createTitleElement() {
+                        const result = document.createElement("div");
+                        result.innerHTML = `<a href="${this.post.url}"><strong>${this.post.title}</strong></a>`;
+                        result.classList.add("card-title");
+                        return result;
+                    }
+
+                    createCompanyElement() {
+                        const result = document.createElement("div");
+                        result.innerHTML = `<strong>${this.post.company}</strong>`;
+                        result.classList.add("card-subtitle", "mb-2", "text-muted");
+                        return result;
+                    }
+
+                    createAttributeElement(key, value) {
+                        const result = document.createElement("div");
+                        result.innerHTML = `<strong>${key}:</strong> ${value}`;
+                        result.classList.add("card-text");
+                        return result;
+                    }
+
+                    createCardBodyElement() {
+                        const result = document.createElement("div");
+                        result.appendChild(this.createTitleElement());
+                        result.appendChild(this.createCompanyElement());
+                        result.appendChild(this.createAttributeElement("Date posted", this.post.listdate));
+                        result.appendChild(this.createAttributeElement("Seniority level", this.post.seniority));
+                        result.appendChild(this.createAttributeElement("Employment type", this.post.type_));
+                        result.appendChild(this.createAttributeElement("Job function", this.post.function_));
+                        result.appendChild(this.createAttributeElement("Industries", this.post.industries));
+                        result.classList.add("card-body");
+                        return result;
+                    }
+
+                    createCardElement() {
+                        const result = document.createElement("div");
+                        result.appendChild(this.createCardBodyElement());
+                        result.classList.add("card", "mb-3");
+                        return result;
+                    }
+                }
+
+                for (const post of result.posts) {
+                    ResultElement.appendChild(new JobPost(post).createCardElement());
+                }
+
             } else {
                 FormElement.reportValidity();
             }

@@ -11,8 +11,8 @@ def home():
     return render_template("index.html")
 
 
-@app.post("/analyze")
-def analyze():
+@app.post("/extract")
+def extract():
     # Process input data
     data = request.get_json()
     keyword = data["keyword"]
@@ -20,11 +20,9 @@ def analyze():
     number = int(data["number"])
 
     urls = lib.scrape_post_urls(keyword, location, number)
-    texts = list(lib.extract_text(html_doc) for html_doc in lib.scrape_description_texts(urls))
-    cnt = lib.count_tokens(texts)
-    data = list({"label": label, "value": value} for label, value in cnt.items() if value > 1)
+    posts = lib.scrape_posts(urls)
 
-    return jsonify( { "data" : data } )
+    return jsonify( { "posts" : posts } )
 
 
 if __name__ == "__main__":

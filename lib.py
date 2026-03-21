@@ -1,5 +1,6 @@
 from collections import Counter
 import itertools
+import re
 from urllib.parse import quote
 
 from bs4 import BeautifulSoup
@@ -60,13 +61,15 @@ def scrape_posts(urls):
         "title": soup.select_one("h3.sub-nav-cta__header").string,
         "company": soup.select_one("a.sub-nav-cta__optional-url").string,
         "description": soup.select_one("div.description__text").prettify(),
-        "criteria": list({
-            "key": item.select_one("h3.description__job-criteria-subheader").string.strip(),
-            "value": item.select_one("span.description__job-criteria-text").string.strip()
-        } for item in soup.select_one("ul.description__job-criteria-list").select("li.description__job-criteria-item"))
+        "seniority": soup.select_one("ul.description__job-criteria-list").find("h3", string=re.compile("Seniority level")).find_next_sibling("span").string.strip(),
+        "type_": soup.select_one("ul.description__job-criteria-list").find("h3", string=re.compile("Employment type")).find_next_sibling("span").string.strip(),
+        "function_": soup.select_one("ul.description__job-criteria-list").find("h3", string=re.compile("Job function")).find_next_sibling("span").string.strip(),
+        "industries": soup.select_one("ul.description__job-criteria-list").find("h3", string=re.compile("Industries")).find_next_sibling("span").string.strip()
     } for index, soup in enumerate(soups))
     return posts
 
 
 if __name__ == "__main__":
-    scrape_posts(scrape_post_urls("Computer Science", "Singapore", 50))
+    import json
+    with open("output.json", "w") as f:
+        json.dump(scrape_posts(scrape_post_urls("Computer Science", "Singapore", 50)), f, indent=4)
