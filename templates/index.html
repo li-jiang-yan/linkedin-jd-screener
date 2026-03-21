@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/css/bootstrap-select.min.css">
+</head>
+<body>
+    <div class="container my-3">
+        <legend>LinkedIn Job Description Word Token Analyzer</legend>
+        <form class="mb-3" id="jobs-search-box-id">
+            <div class="mb-3">
+                <label class="sr-only" for="jobs-search-box-keyword-id">Search by title, skill, or company</label>
+                <input placeholder="Search by title, skill, or company" class="form-control" id="jobs-search-box-keyword-id" type="text" required>
+            </div>
+            <div class="mb-3">
+                <label class="sr-only" for="jobs-search-box-location-id">City, state, or zip code</label>
+                <input placeholder="City, state, or zip code" class="form-control" id="jobs-search-box-location-id" type="text" required>
+            </div>
+            <div class="mb-3">
+                <label class="sr-only" for="jobs-search-box-results-id">Number of search results</label>
+                <input placeholder="Number of search results" class="form-control" id="jobs-search-box-results-id" type="number" min="1" value="25" required>
+                <div class="form-text">Note that more time would be needed to search and analyze more search results.</div>
+            </div>
+            <button class="btn btn-primary" id="jobs-search-box-button-id" type="button">Search</button>
+        </form>
+        <div class="mb-3" id="output"></div>
+        <footer class="mb-3 border-top">
+            <p class="mb-3 text-center text-body-secondary">Made with &#10084; by JY<br>Most importantly, keep learning =)</p>
+        </footer>
+    </div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-Fy6S3B9q64WdZWQUiU+q4/2Lc9npb8tCaSX9FK7E8HnRr0Jz8D6OP9dO5Vg3Q9ct" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const FormElement = document.getElementById("jobs-search-box-id");
+        const KeywordInputElement = document.getElementById("jobs-search-box-keyword-id");
+        const LocationInputElement = document.getElementById("jobs-search-box-location-id");
+        const ResultsInputElement = document.getElementById("jobs-search-box-results-id");
+        const ButtonElement = document.getElementById("jobs-search-box-button-id");
+        const OutputDivElement = document.getElementById("output");
+
+        ButtonElement.addEventListener("click", async () => {
+            if (FormElement.checkValidity()) {
+                OutputDivElement.innerHTML = "<span class='spinner-border spinner-border-sm' role='status' aria-hidden='true'></span>&nbsp;<span>Retrieving data from backend...</span>";
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        keyword: KeywordInputElement.value,
+                        location: LocationInputElement.value,
+                        number: ResultsInputElement.value,
+                    }),
+                });
+                if (!response.ok) {
+                    OutputDivElement.innerHTML = "Backend response failed";
+                    throw new Error(`Response status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                result.data.sort((a, b) => b.value - a.value);
+                OutputDivElement.innerHTML = "<select class='selectpicker w-auto' id='select' multiple='multiple' data-live-search='true' data-selected-text-format='count' data-actions-box='true'></select>";
+                OutputDivElement.innerHTML += "<canvas id='chart'></canvas>";
+
+                const SelectElement = document.getElementById("select");
+                for (const token of result.data.map(row => row.label)) {
+                    SelectElement.add(new Option(token));
+                }
+                $("#select").selectpicker("refresh");
+
+                const ChartElement = document.getElementById("chart");
+                const chart = new Chart(
+                    ChartElement, {
+                        type: "bar",
+                        data: {
+                            labels: [],
+                            datasets: [
+                                {
+                                    label: "Token count",
+                                    data: []
+                                }
+                            ]
+                        },
+                        options: {responsive: true}
+                    }
+                );
+
+                SelectElement.addEventListener("change", () => {
+                    const selectedOptions = Array.from(SelectElement.options).filter(option => option.selected).map(option => option.value);
+                    const selectedOptionSet = new Set(selectedOptions);
+                    const chartData = result.data.filter(token => {
+                        return selectedOptionSet.has(token.label);
+                    });
+                    chartData.sort((a, b) => b.value - a.value);
+                    chart.data.labels = chartData.map(row => row.label);
+                    chart.data.datasets[0].data = chartData.map(row => row.value);
+                    chart.update();
+                });
+            } else {
+                FormElement.reportValidity();
+            }
+        });
+    </script>
+</body>
+</html>
